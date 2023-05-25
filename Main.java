@@ -2,7 +2,8 @@ import java.util.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
-import java.awt.image.BufferedImage;
+import java.awt.image.*;
+
 import javax.swing.JFrame;
 
 public class Main extends Canvas{
@@ -13,8 +14,13 @@ public class Main extends Canvas{
 	static int dasKey;
 	static int rotation;
 	static int showSolution = -1;
+	static int hold = 0;
 	static long dasTime;
 	static long start;
+	static long solution;
+	static long disp;
+	static boolean update = true;
+	static boolean canHold = true;
 	static Point[][] shapes = {{}, //I J L O S T Z
 			{new Point(-1, 0), new Point(0, 0), new Point(1, 0), new Point(2, 0)},
 			{new Point(-1, -1), new Point(-1, 0), new Point(0, 0), new Point(1, 0)},
@@ -31,18 +37,24 @@ public class Main extends Canvas{
 	static final Color[] colors = {Color.black, Color.cyan, Color.blue, Color.orange, Color.yellow, Color.green, Color.magenta, Color.red, Color.gray, Color.white};
 	static boolean[] keys = new boolean[65536];
 	static Point current = new Point(4, 1);
+	static Point mouse = null;
 	static int[][] board = new int[20][10];
 	static ArrayList<Integer> queue;
+	static int[] startQueue;
 	private static final long serialVersionUID = 1L;
 	static BufferedImage image = new BufferedImage(800, 600, BufferedImage.TYPE_3BYTE_BGR);
+	static Image controls = Toolkit.getDefaultToolkit().getImage("controls.jpg");
 	static JFrame frame;
 	static Canvas canvas;
 	static int total = 0;
-
-	static int pieces = 3;
 	static int height = 4;
+
+	//Controls
+	static int das = 110;
+	static int arr = 0;
+	static int pieces = 4;
 	
-	public static void main(String[] args) throws IOException{
+	public static void main(String[] args) throws IOException, InterruptedException{
 		frame = new JFrame();
 		canvas = new Main();
 		frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -58,6 +70,8 @@ public class Main extends Canvas{
 			}
 			@Override
 			public void mousePressed(MouseEvent e) {
+				mouse = e.getPoint();
+				update = true;
 			}
 			@Override
 			public void mouseReleased(MouseEvent e) {				
@@ -93,6 +107,8 @@ public class Main extends Canvas{
 		}
 		reader.close();
 		total = patterns.size();
+		canvas.repaint();
+		frame.setVisible(true);
 		while (true) {
 			board = new int[20][10];
 			String pick = patterns.get((int)(Math.random()*total));
@@ -127,13 +143,55 @@ public class Main extends Canvas{
 			if (possible.isEmpty()) {
 				System.out.println("No solution???");
 			}
-			canvas.repaint();
-			frame.setVisible(true);
+			int holdIndex = -1;
+			startQueue = new int[pieces+1];
+			for (int i=0; i<pieces; i++) {
+				boolean doHold = Math.random()<0.5;
+				if (doHold) {
+					if (holdIndex>=0) {
+						startQueue[holdIndex] = queue.get(i);
+						holdIndex = i+1;
+					} else {
+						holdIndex = i;
+						startQueue[i+1] = queue.get(i);
+					}
+				} else {
+					if (holdIndex>=0) {
+						startQueue[i+1] = queue.get(i);
+					} else {
+						startQueue[i] = queue.get(i);
+					}
+				}
+			}
+			ArrayList<Integer> remain = new ArrayList<Integer>(Arrays.asList(1,2,3,4,5,6,7));
+			for (int i=0; i<pieces; i++) {
+				remain.remove((Integer)queue.get(i));
+			}
+			if (holdIndex==-1) {
+				startQueue[pieces] = remain.get((int)(Math.random()*(7-pieces)));
+			} else {
+				startQueue[holdIndex] = remain.get((int)(Math.random()*(7-pieces)));
+			}
+			queue.clear();
+			for (int i=0; i<pieces+1; i++) {
+				queue.add(startQueue[i]);
+			}
+			hold = 0;
+			update = true;
+			drawDisplay();
+			canvas.paint(canvas.getGraphics());
 			while (true) {
+				Thread.sleep(Math.max(20, arr));
+				if (mouse!=null&&mouse.x>450&&mouse.y>400&&mouse.x<750&&mouse.y<500) {
+					keys['G'] = true;
+					mouse = null;
+				}
 				if (showSolution<0) {
 					tick();
 					if (keys['G']) {
+						update = true;
 						showSolution = 0;
+						solution = System.currentTimeMillis()+500;
 						keys['G'] = false;
 						board = new int[20][10];
 						for (int y=20-height; y<20; y++) {
@@ -146,16 +204,18 @@ public class Main extends Canvas{
 							}
 						}
 						queue.clear();
-						for (int i=height*2; i<height*2+pieces; i++) {
-							queue.add(pick.charAt(i)-48);
+						for (int i=0; i<pieces+1; i++) {
+							queue.add(startQueue[i]);
 						}
 					}
 				} else {
-					if (keys['G']) {
+					if (System.currentTimeMillis()>solution) {
+						update = true;
 						showSolution++;
+						solution+=500;
 						if (showSolution%2==1) {
 							for (int i=0; i<4; i++) {
-								board[possible.peek().positions.get(showSolution/2)[i].y][possible.peek().positions.get(showSolution/2)[i].x] = queue.get(showSolution/2);
+								board[possible.peek().positions.get(showSolution/2)[i].y][possible.peek().positions.get(showSolution/2)[i].x] = pick.charAt(showSolution/2+8)-48;
 							}							
 						} else {
 							if (showSolution==pieces*2) {
@@ -170,17 +230,36 @@ public class Main extends Canvas{
 									}
 								}
 								queue.clear();
-								for (int i=height*2; i<height*2+pieces; i++) {
-									queue.add(pick.charAt(i)-48);
+								for (int i=0; i<pieces+1; i++) {
+									queue.add(startQueue[i]);
 								}
+								current = new Point(4, 1);
 							} else {
 								update(board);
 							}
 						}
+					}
+					if (keys['G']) {
+						showSolution = -1;
+						for (int y=20-height; y<20; y++) {
+							for (int x=0; x<10; x++) {
+								if (x>=pick.charAt((y-20+height)*2)-48&&x<=pick.charAt((y-20+height)*2+1)-48) {
+									board[y][x] = 0;
+								} else {
+									board[y][x] = 8;
+								}
+							}
+						}
+						queue.clear();
+						for (int i=height*2; i<height*2+pieces; i++) {
+							queue.add(pick.charAt(i)-48);
+						}
 						keys['G'] = false;
+						update = true;
 					}
 				}
-				if (queue.isEmpty()) {
+				if (queue.isEmpty()||(queue.size()==1&&hold==0)) {
+					queue.clear();
 					boolean clear = true;
 					for (int y=0; y<20; y++) {
 						for (int x=0; x<10; x++) {
@@ -203,9 +282,10 @@ public class Main extends Canvas{
 								}
 							}
 						}
-						for (int i=height*2; i<height*2+pieces; i++) {
-							queue.add(pick.charAt(i)-48);
+						for (int i=0; i<pieces+1; i++) {
+							queue.add(startQueue[i]);
 						}
+						hold = 0;
 					}
 				}
 				drawDisplay();
@@ -214,24 +294,159 @@ public class Main extends Canvas{
 		}
 	}
 	public static void tick() {
-		if (queue.size()==0) {
+		if (queue.size()==0||(queue.size()==1&&hold==0)) {
+			queue.clear();
 			return;
 		}
 		Point[] shape = new Point[4];
 		shape = rotate(queue.get(0), current, rotation);
+		if (mouse!=null) {
+			if (mouse.x>450&&mouse.y>100&&mouse.x<550&&mouse.y<200) {
+				for (int i=0; i<4; i++) {
+					shape[i].x--;
+				}
+				current.x--;
+				if (collide(board, shape)) {
+					for (int i=0; i<4; i++) {
+						shape[i].x++;
+					}
+					current.x++;
+				} else {
+					update = true;
+				}
+			}
+			if (mouse.x>550&&mouse.y>100&&mouse.x<650&&mouse.y<200) {
+				for (int i=0; i<4; i++) {
+					shape[i].y++;
+				}
+				current.y++;
+				if (collide(board, shape)) {
+					for (int i=0; i<4; i++) {
+						shape[i].y--;
+					}
+					current.y--;
+				} else {
+					update = true;
+				}
+			}
+			if (mouse.x>650&&mouse.y>100&&mouse.x<750&&mouse.y<200) {
+				for (int i=0; i<4; i++) {
+					shape[i].x++;
+				}
+				current.x++;
+				if (collide(board, shape)) {
+					for (int i=0; i<4; i++) {
+						shape[i].x--;
+					}
+					current.x--;
+				} else {
+					update = true;
+				}
+			}
+			if (mouse.x>450&&mouse.y>200&&mouse.x<550&&mouse.y<300) {
+				int moves = 0;
+				while (!collide(board, shape)) {
+					for (int i=0; i<4; i++) {
+						shape[i].x--;
+					}
+					current.x--;
+					moves++;
+				}
+				for (int i=0; i<4; i++) {
+					shape[i].x++;
+				}
+				current.x++;
+				if (moves>1) {
+					update = true;
+				}
+			}
+			if (mouse.x>550&&mouse.y>200&&mouse.x<650&&mouse.y<300) {
+				int moves = 0;
+				while (!collide(board, shape)) {
+					for (int i=0; i<4; i++) {
+						shape[i].y++;
+					}
+					current.y++;
+					moves++;
+				}
+				for (int i=0; i<4; i++) {
+					shape[i].y--;
+				}
+				current.y--;
+				if (moves>1) {
+					update = true;
+				}
+			}
+			if (mouse.x>650&&mouse.y>200&&mouse.x<750&&mouse.y<300) {
+				int moves = 0;
+				while (!collide(board, shape)) {
+					for (int i=0; i<4; i++) {
+						shape[i].x++;
+					}
+					current.x++;
+					moves++;
+				}
+				for (int i=0; i<4; i++) {
+					shape[i].x--;
+				}
+				current.x--;
+				if (moves>1) {
+					update = true;
+				}
+			}
+			if (mouse.x>450&&mouse.y>300&&mouse.x<550&&mouse.y<400) {
+				rotation+=4;
+				rotation%=4;
+				Point rotate = srs(board, queue.get(0), current, rotation, false);
+				if (rotate!=null) {
+					rotation--;
+					current.translate(rotate.x, rotate.y);
+					shape = rotate(queue.get(0), current, rotation);
+					update = true;
+				}
+			}
+			if (mouse.x>550&&mouse.y>300&&mouse.x<650&&mouse.y<400) {
+				if (!collide(board, rotate(queue.get(0), current, (rotation+2)%4))){
+					rotation+=2;
+					shape = rotate(queue.get(0), current, rotation%4);
+					update = true;
+				}
+			}
+			if (mouse.x>650&&mouse.y>300&&mouse.x<750&&mouse.y<400) {
+				rotation+=4;
+				rotation%=4;
+				Point rotate = srs(board, queue.get(0), current, rotation, true);
+				if (rotate!=null) {
+					update = true;
+					rotation++;
+					current.translate(rotate.x, rotate.y);
+					shape = rotate(queue.get(0), current, rotation);
+				}
+			}
+			mouse = null;
+		}
 		if (keys[KeyEvent.VK_LEFT]) {
 			if (dasKey==-1) {
-				if (dasTime+110<System.currentTimeMillis()) {
+				if (dasTime+das<System.currentTimeMillis()) {
 					while (!collide(board, shape)) {
 						for (int i=0; i<4; i++) {
 							shape[i].x--;
 						}
 						current.x--;
+						if (arr>=20) {
+							break;
+						} else if (!collide(board, shape)) {
+							update = true;
+						}
 					}
-					for (int i=0; i<4; i++) {
-						shape[i].x++;
+					if (collide(board, shape)) {
+						for (int i=0; i<4; i++) {
+							shape[i].x++;
+						}
+						current.x++;
+					} else {
+						update = true;
 					}
-					current.x++;
 				}
 			} else {
 				dasKey = -1;
@@ -245,6 +460,8 @@ public class Main extends Canvas{
 						shape[i].x++;
 					}
 					current.x++;
+				} else {
+					update = true;
 				}
 			}
 		} else if (dasKey==-1) {
@@ -252,17 +469,26 @@ public class Main extends Canvas{
 		}
 		if (keys[KeyEvent.VK_RIGHT]) {
 			if (dasKey==1) {
-				if (dasTime+110<System.currentTimeMillis()) {
+				if (dasTime+das<System.currentTimeMillis()) {
 					while (!collide(board, shape)) {
 						for (int i=0; i<4; i++) {
 							shape[i].x++;
 						}
 						current.x++;
+						if (arr>=20) {
+							break;
+						} else if (!collide(board, shape)) {
+							update = true;
+						}
 					}
-					for (int i=0; i<4; i++) {
-						shape[i].x--;
+					if (collide(board, shape)) {
+						for (int i=0; i<4; i++) {
+							shape[i].x--;
+						}
+						current.x--;
+					} else {
+						update = true;
 					}
-					current.x--;
 				}
 			} else {
 				dasKey = 1;
@@ -276,6 +502,8 @@ public class Main extends Canvas{
 						shape[i].x--;
 					}
 					current.x--;
+				} else {
+					update = true;
 				}
 			}
 		} else if (dasKey==1) {
@@ -287,6 +515,7 @@ public class Main extends Canvas{
 			rotation%=4;
 			Point rotate = srs(board, queue.get(0), current, rotation, true);
 			if (rotate!=null) {
+				update = true;
 				rotation++;
 				current.translate(rotate.x, rotate.y);
 				shape = rotate(queue.get(0), current, rotation);
@@ -298,13 +527,20 @@ public class Main extends Canvas{
 					shape[i].y++;
 				}
 				current.y++;
+				if (arr>=20) {
+					break;
+				} else if (!collide(board, shape)) {
+					update = true;
+				}
 			}
-
-			for (int i=0; i<4; i++) {
-				shape[i].y--;
+			if (collide(board, shape)) {
+				for (int i=0; i<4; i++) {
+					shape[i].y--;
+				}
+				current.y--;
+			} else {
+				update = true;
 			}
-			current.y--;
-			
 		}
 		rotation+=4;
 		rotation%=4;
@@ -319,6 +555,8 @@ public class Main extends Canvas{
 					shape[i].y--;
 				}
 				current.y--;
+			} else {
+				update = true;
 			}
 		}
 		if (keys['Z']) {
@@ -330,6 +568,7 @@ public class Main extends Canvas{
 				rotation--;
 				current.translate(rotate.x, rotate.y);
 				shape = rotate(queue.get(0), current, rotation);
+				update = true;
 			}
 		}
 		rotation+=4;
@@ -339,12 +578,27 @@ public class Main extends Canvas{
 			if (!collide(board, rotate(queue.get(0), current, (rotation+2)%4))){
 				rotation+=2;
 				shape = rotate(queue.get(0), current, rotation%4);
+				update = true;
 			}
+		}
+		if (keys['C']) {
+			if (canHold) {
+				if (hold>0) {
+					queue.add(1, hold);
+				}
+				hold = queue.remove(0);
+				update = true;
+				canHold = false;
+				current = new Point(4, 1);
+				rotation = 0;
+			}
+			return;
 		}
 		rotation+=4;
 		rotation%=4;
 		if (keys[' ']) {
 			keys[' '] = false;
+			update = true;
 			while (!collide(board, shape)) {
 				for (int i=0; i<4; i++) {
 					shape[i].y++;
@@ -362,6 +616,7 @@ public class Main extends Canvas{
 			update(board);
 			rotation = 0;
 			current = new Point(4, 1);
+			canHold = true;
 		}
 	}
 	public static int update(int[][] board) {
@@ -642,9 +897,15 @@ public class Main extends Canvas{
 		g.drawImage(image, 0, 0, null);
 	}
 	public static void drawDisplay() {
+		if (!update) {
+			return;
+		}
+		update = false;
 		Graphics g = image.getGraphics();
 		g.setColor(Color.black);
 		g.fillRect(0, 0, 800, 600);
+		g.drawImage(controls, 450, 100, 300, 400, null);
+		g.setColor(Color.white);
 		for (int y=0; y<20; y++) {
 			for (int x=0; x<10; x++) {
 				g.setColor(colors[board[y][x]]);
@@ -676,12 +937,15 @@ public class Main extends Canvas{
 			shadow[i].translate(0, -1);
 			g.fillRect(100+shadow[i].x*20, 100+shadow[i].y*20, 20, 20);
 		}
+		g.setColor(colors[hold]);
+		for (int i=0; i<4&&showSolution<0&&hold>0; i++) {
+			g.fillRect(30+shapes[hold][i].x*20, 50+10+shapes[hold][i].y*20, 20, 20);
+		}
 		g.setColor(colors[queue.get(0)]);
 		Point[] shape = rotate(queue.get(0), current, rotation);
 		for (int i=0; i<4&&showSolution<0; i++) {
 			g.fillRect(100+shape[i].x*20, 100+shape[i].y*20, 20, 20);
 		}
-		g.setColor(Color.white);
 		//debug
 		//g.drawString(current.x+" "+current.y, 50, 550);
 	}
