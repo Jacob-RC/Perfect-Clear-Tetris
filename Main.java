@@ -3,21 +3,23 @@ import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
 import java.awt.image.*;
-
+import javax.sound.sampled.*;
 import javax.swing.JFrame;
 
 public class Main extends Canvas{
-	static int stage = -1;
+	static int stage = 0;
 	static int selected;
-	static int progress;
-	static int found = 0;
 	static int dasKey;
 	static int rotation;
-	static int showSolution = -1;
+	static int solIndex = -1;
+	static int moveIndex = 0;
+	static int speed = 1; //0: 175/60, 1: 150/40, 2: 125/20, 3: 100/0
 	static int hold = 0;
+	static int total = 0;
+	static int height = 5;
 	static long dasTime;
 	static long start;
-	static long solution;
+	static long nextSol;
 	static long disp;
 	static boolean update = true;
 	static boolean canHold = true;
@@ -40,19 +42,19 @@ public class Main extends Canvas{
 	static Point mouse = null;
 	static int[][] board = new int[20][10];
 	static ArrayList<Integer> queue;
+	static ArrayList<int[]> movement; 
 	static int[] startQueue;
 	private static final long serialVersionUID = 1L;
 	static BufferedImage image = new BufferedImage(800, 600, BufferedImage.TYPE_3BYTE_BGR);
 	static Image controls = Toolkit.getDefaultToolkit().getImage("controls.jpg");
+	static Image menu = Toolkit.getDefaultToolkit().getImage("menu.jpg");
 	static JFrame frame;
 	static Canvas canvas;
-	static int total = 0;
-	static int height = 4;
 
 	//Controls
-	static int das = 110;
+	static int das = 100;
 	static int arr = 0;
-	static int pieces = 4;
+	static int pieces = 5;
 	
 	public static void main(String[] args) throws IOException, InterruptedException{
 		frame = new JFrame();
@@ -96,6 +98,49 @@ public class Main extends Canvas{
 				keys[e.getKeyCode()] = false;
 			}
 		});
+		canvas.repaint();
+		frame.setVisible(true);
+		while (stage==0) {
+			drawDisplay();
+			canvas.paint(canvas.getGraphics());
+			if (keys[KeyEvent.VK_LEFT]) {
+				if (speed>0) {
+					speed--;
+					keys[KeyEvent.VK_LEFT] = false;
+				}
+			}
+			if (keys[KeyEvent.VK_RIGHT]) {
+				if (speed<3) {
+					speed++;
+					keys[KeyEvent.VK_RIGHT] = false;
+				}
+			}
+			if (mouse!=null&&mouse.y>520) {
+				stage = 1;
+				if (mouse.x>0&&mouse.x<200) {
+					pieces = 3;
+					height = 4;
+					break;
+				}
+				if (mouse.x>200&&mouse.x<400) {
+					pieces = 4;
+					height = 4;
+					break;
+				}
+				if (mouse.x>400&&mouse.x<600) {
+					pieces = 5;
+					height = 5;
+					break;
+				}
+				if (mouse.x>600&&mouse.x<800) {
+					pieces = 6;
+					height = 5;
+					break;
+				}
+				mouse = null;
+			}
+		}
+		update = true;
 		BufferedReader reader = new BufferedReader(new FileReader("solutions"+pieces+".txt"));
 		ArrayList<String> patterns = new ArrayList<String>();
 		while (true) {
@@ -107,14 +152,12 @@ public class Main extends Canvas{
 		}
 		reader.close();
 		total = patterns.size();
-		canvas.repaint();
-		frame.setVisible(true);
 		while (true) {
 			board = new int[20][10];
 			String pick = patterns.get((int)(Math.random()*total));
 			for (int y=20-height; y<20; y++) {
 				for (int x=0; x<10; x++) {
-					if (x>=pick.charAt(y*2-32)-48&&x<=pick.charAt(y*2-31)-48) {
+					if (x>=pick.charAt((y-20+height)*2)-48&&x<=pick.charAt((y-20+height)*2+1)-48) {
 						board[y][x] = 0;
 					} else {
 						board[y][x] = 8;
@@ -186,13 +229,15 @@ public class Main extends Canvas{
 					keys['G'] = true;
 					mouse = null;
 				}
-				if (showSolution<0) {
+				if (solIndex<0) {
 					tick();
 					if (keys['G']) {
-						update = true;
-						showSolution = 0;
-						solution = System.currentTimeMillis()+500;
 						keys['G'] = false;
+						solIndex = 0;
+						queue = new ArrayList<Integer>();
+						for (int i=height*2; i<height*2+pieces; i++) {
+							queue.add(pick.charAt(i)-48);
+						}
 						board = new int[20][10];
 						for (int y=20-height; y<20; y++) {
 							for (int x=0; x<10; x++) {
@@ -203,23 +248,23 @@ public class Main extends Canvas{
 								}
 							}
 						}
-						queue.clear();
-						for (int i=0; i<pieces+1; i++) {
-							queue.add(startQueue[i]);
-						}
+						movement = getPath(queue.get(0), board, possible.peek().positions.get(0));
+						moveIndex = 0;
+						nextSol = System.currentTimeMillis()+100;
+						update = true;
 					}
 				} else {
-					if (System.currentTimeMillis()>solution) {
+					if (System.currentTimeMillis()>nextSol) {
 						update = true;
-						showSolution++;
-						solution+=500;
-						if (showSolution%2==1) {
+						moveIndex++;
+						if (moveIndex==movement.size()) {
 							for (int i=0; i<4; i++) {
-								board[possible.peek().positions.get(showSolution/2)[i].y][possible.peek().positions.get(showSolution/2)[i].x] = pick.charAt(showSolution/2+8)-48;
-							}							
-						} else {
-							if (showSolution==pieces*2) {
-								showSolution = -1;
+								board[possible.peek().positions.get(solIndex)[i].y][possible.peek().positions.get(solIndex)[i].x] = queue.get(solIndex);
+							}	
+							update(board);
+							solIndex++;
+							if (solIndex==pieces) {
+								solIndex = -1;
 								for (int y=20-height; y<20; y++) {
 									for (int x=0; x<10; x++) {
 										if (x>=pick.charAt((y-20+height)*2)-48&&x<=pick.charAt((y-20+height)*2+1)-48) {
@@ -233,29 +278,21 @@ public class Main extends Canvas{
 								for (int i=0; i<pieces+1; i++) {
 									queue.add(startQueue[i]);
 								}
-								current = new Point(4, 1);
-							} else {
-								update(board);
+								canHold = true;
+								hold = 0;
+								continue;
 							}
-						}
-					}
-					if (keys['G']) {
-						showSolution = -1;
-						for (int y=20-height; y<20; y++) {
-							for (int x=0; x<10; x++) {
-								if (x>=pick.charAt((y-20+height)*2)-48&&x<=pick.charAt((y-20+height)*2+1)-48) {
-									board[y][x] = 0;
-								} else {
-									board[y][x] = 8;
-								}
+							movement = getPath(queue.get(solIndex), board, possible.peek().positions.get(solIndex));
+							if (movement==null) {
+								Math.abs(0);
 							}
+							moveIndex = 0;
+							nextSol = System.currentTimeMillis()+100;
+						} else if (moveIndex==movement.size()-1) {
+							nextSol = System.currentTimeMillis()+300;
+						} else if (movement.get(moveIndex)[2]!=movement.get(moveIndex-1)[2]||movement.get(moveIndex)[2]!=movement.get(moveIndex+1)[2]) {
+							nextSol = System.currentTimeMillis()+200;
 						}
-						queue.clear();
-						for (int i=height*2; i<height*2+pieces; i++) {
-							queue.add(pick.charAt(i)-48);
-						}
-						keys['G'] = false;
-						update = true;
 					}
 				}
 				if (queue.isEmpty()||(queue.size()==1&&hold==0)) {
@@ -270,6 +307,7 @@ public class Main extends Canvas{
 						}
 					}
 					if (clear) {
+						playSound("allclear");
 						break;
 					} else {
 						board = new int[20][10];
@@ -294,7 +332,7 @@ public class Main extends Canvas{
 		}
 	}
 	public static void tick() {
-		if (queue.size()==0||(queue.size()==1&&hold==0)) {
+		if (queue.isEmpty()||(queue.size()==1&&hold==0)) {
 			queue.clear();
 			return;
 		}
@@ -344,57 +382,6 @@ public class Main extends Canvas{
 				}
 			}
 			if (mouse.x>450&&mouse.y>200&&mouse.x<550&&mouse.y<300) {
-				int moves = 0;
-				while (!collide(board, shape)) {
-					for (int i=0; i<4; i++) {
-						shape[i].x--;
-					}
-					current.x--;
-					moves++;
-				}
-				for (int i=0; i<4; i++) {
-					shape[i].x++;
-				}
-				current.x++;
-				if (moves>1) {
-					update = true;
-				}
-			}
-			if (mouse.x>550&&mouse.y>200&&mouse.x<650&&mouse.y<300) {
-				int moves = 0;
-				while (!collide(board, shape)) {
-					for (int i=0; i<4; i++) {
-						shape[i].y++;
-					}
-					current.y++;
-					moves++;
-				}
-				for (int i=0; i<4; i++) {
-					shape[i].y--;
-				}
-				current.y--;
-				if (moves>1) {
-					update = true;
-				}
-			}
-			if (mouse.x>650&&mouse.y>200&&mouse.x<750&&mouse.y<300) {
-				int moves = 0;
-				while (!collide(board, shape)) {
-					for (int i=0; i<4; i++) {
-						shape[i].x++;
-					}
-					current.x++;
-					moves++;
-				}
-				for (int i=0; i<4; i++) {
-					shape[i].x--;
-				}
-				current.x--;
-				if (moves>1) {
-					update = true;
-				}
-			}
-			if (mouse.x>450&&mouse.y>300&&mouse.x<550&&mouse.y<400) {
 				rotation+=4;
 				rotation%=4;
 				Point rotate = srs(board, queue.get(0), current, rotation, false);
@@ -405,14 +392,14 @@ public class Main extends Canvas{
 					update = true;
 				}
 			}
-			if (mouse.x>550&&mouse.y>300&&mouse.x<650&&mouse.y<400) {
+			if (mouse.x>550&&mouse.y>200&&mouse.x<650&&mouse.y<300) {
 				if (!collide(board, rotate(queue.get(0), current, (rotation+2)%4))){
 					rotation+=2;
 					shape = rotate(queue.get(0), current, rotation%4);
 					update = true;
 				}
 			}
-			if (mouse.x>650&&mouse.y>300&&mouse.x<750&&mouse.y<400) {
+			if (mouse.x>650&&mouse.y>200&&mouse.x<750&&mouse.y<300) {
 				rotation+=4;
 				rotation%=4;
 				Point rotate = srs(board, queue.get(0), current, rotation, true);
@@ -422,6 +409,42 @@ public class Main extends Canvas{
 					current.translate(rotate.x, rotate.y);
 					shape = rotate(queue.get(0), current, rotation);
 				}
+			}
+			if (mouse.x>450&&mouse.y>300&&mouse.x<600&&mouse.y<400) {
+				if (canHold) {
+					if (hold>0) {
+						queue.add(1, hold);
+					}
+					hold = queue.remove(0);
+					update = true;
+					canHold = false;
+					current = new Point(4, 1);
+					rotation = 0;
+				}
+			}
+			if (mouse.x>600&&mouse.y>300&&mouse.x<750&&mouse.y<400) {
+				update = true;
+				while (!collide(board, shape)) {
+					for (int i=0; i<4; i++) {
+						shape[i].y++;
+					}
+					current.y++;
+				}
+				for (int i=0; i<4; i++) {
+					shape[i].y--;
+				}
+				current.y--;
+				for (int i=0; i<4; i++) {
+					board[shape[i].y][shape[i].x] = queue.get(0);
+				}
+				queue.remove(0);
+				playSound("harddrop");
+				if (update(board)>0) {
+					playSound("clearline");
+				}
+				rotation = 0;
+				current = new Point(4, 1);
+				canHold = true;
 			}
 			mouse = null;
 		}
@@ -613,7 +636,10 @@ public class Main extends Canvas{
 				board[shape[i].y][shape[i].x] = queue.get(0);
 			}
 			queue.remove(0);
-			update(board);
+			playSound("harddrop");
+			if (update(board)>0) {
+				playSound("clearline");
+			}
 			rotation = 0;
 			current = new Point(4, 1);
 			canHold = true;
@@ -644,13 +670,44 @@ public class Main extends Canvas{
 		}
 		return lines;
 	}
+	public static ArrayList<int[]> getPath(int piece, int[][] board, Point[] location){
+		Queue<ArrayList<int[]>> visitQueue = new LinkedList<>();
+		ArrayList<int[]> current = new ArrayList<int[]>();
+		boolean[][][] visited = new boolean[10][20][4];
+		int[] initial = {4, 1, 0};
+		current.add(initial);
+		visitQueue.add(current);
+		while (visitQueue.size()>0) {
+			current = visitQueue.poll();
+			int[] position = current.get(current.size()-1);
+			position[2]+=4;
+			position[2]%=4;
+			if (visited[position[0]][position[1]][position[2]]) {
+				continue;
+			}
+			visited[position[0]][position[1]][position[2]] = true;
+			int[][] legal = legal(board, position, piece);
+			Point[] compare = rotate(piece, new Point(position[0], position[1]), position[2]);
+			if (Arrays.equals(compare, location)) {
+				return current;
+			}
+			for (int i=0; i<6; i++) {
+				if (legal[i]!=null) {
+					ArrayList<int[]> copy = new ArrayList<int[]>(current);
+					copy.add(legal[i]);
+					visitQueue.add(copy);
+				}
+			}
+		}
+		return null;
+	}
 	static class Solution{
 		int lines;
 		ArrayList<Point[]> positions = new ArrayList<Point[]>();
 		boolean valid = true;
 		int[][] board = new int[20][10];
 		public Solution(int[][] b) {
-			for (int y=16; y<20; y++) {
+			for (int y=20-height; y<20; y++) {
 				for (int x=0; x<10; x++) {
 					board[y][x] = b[y][x];
 				}
@@ -893,10 +950,28 @@ public class Main extends Canvas{
 		}
 		return copy;
 	}
+	public static void playSound(String name) {
+		try {
+			Clip clip = AudioSystem.getClip();
+			clip.open(AudioSystem.getAudioInputStream(new File(name+".wav")));
+			clip.start();
+		} catch (Exception e) {}
+	}
 	public void paint(Graphics g) {
 		g.drawImage(image, 0, 0, null);
 	}
 	public static void drawDisplay() {
+		if (stage==0) {
+			Graphics g = image.getGraphics();
+			g.setColor(Color.black);
+			g.fillRect(0, 0, 800, 600);
+			g.drawImage(menu, 0, 0, 800, 600, null);
+			g.setColor(Color.white);
+			g.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 20));
+			String[] names = {"slow", "normal", "fast", "instant"};
+			g.drawString("Control speed: "+names[speed], 50, 200);
+			return;
+		}
 		if (!update) {
 			return;
 		}
@@ -912,7 +987,7 @@ public class Main extends Canvas{
 				g.fillRect(100+x*20, 100+y*20, 20, 20);
 			}
 		}
-		for (int i=1; i<queue.size()&&showSolution<0; i++) {
+		for (int i=1; i<queue.size()&&solIndex<0; i++) {
 			int piece = queue.get(i);
 			g.setColor(colors[piece]);
 			for (int j=0; j<4; j++) {
@@ -933,18 +1008,25 @@ public class Main extends Canvas{
 				shadow[i].translate(0, 1);
 			}
 		}
-		for (int i=0; i<4&&showSolution<0; i++) {
+		for (int i=0; i<4&&solIndex<0; i++) {
 			shadow[i].translate(0, -1);
 			g.fillRect(100+shadow[i].x*20, 100+shadow[i].y*20, 20, 20);
 		}
 		g.setColor(colors[hold]);
-		for (int i=0; i<4&&showSolution<0&&hold>0; i++) {
+		for (int i=0; i<4&&solIndex<0&&hold>0; i++) {
 			g.fillRect(30+shapes[hold][i].x*20, 50+10+shapes[hold][i].y*20, 20, 20);
 		}
 		g.setColor(colors[queue.get(0)]);
 		Point[] shape = rotate(queue.get(0), current, rotation);
-		for (int i=0; i<4&&showSolution<0; i++) {
+		for (int i=0; i<4&&solIndex<0; i++) {
 			g.fillRect(100+shape[i].x*20, 100+shape[i].y*20, 20, 20);
+		}
+		if (solIndex>=0) {
+			g.setColor(colors[queue.get(solIndex)]);
+			shape = rotate(queue.get(solIndex), new Point(movement.get(moveIndex)[0], movement.get(moveIndex)[1]), movement.get(moveIndex)[2]);
+			for (int i=0; i<4; i++) {
+				g.fillRect(100+shape[i].x*20, 100+shape[i].y*20, 20, 20);
+			}
 		}
 		//debug
 		//g.drawString(current.x+" "+current.y, 50, 550);
