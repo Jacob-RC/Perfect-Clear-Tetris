@@ -280,6 +280,7 @@ public class Main extends Canvas{
 								}
 								canHold = true;
 								hold = 0;
+								current = new Point(4, 1);
 								continue;
 							}
 							movement = getPath(queue.get(solIndex), board, possible.peek().positions.get(solIndex));
@@ -287,11 +288,11 @@ public class Main extends Canvas{
 								Math.abs(0);
 							}
 							moveIndex = 0;
-							nextSol = System.currentTimeMillis()+100;
+							nextSol = System.currentTimeMillis()+500/(speed+2);
 						} else if (moveIndex==movement.size()-1) {
-							nextSol = System.currentTimeMillis()+300;
+							nextSol = System.currentTimeMillis()+1500/(speed+2);
 						} else if (movement.get(moveIndex)[2]!=movement.get(moveIndex-1)[2]||movement.get(moveIndex)[2]!=movement.get(moveIndex+1)[2]) {
-							nextSol = System.currentTimeMillis()+200;
+							nextSol = System.currentTimeMillis()+1000/(speed+2);
 						}
 					}
 				}
