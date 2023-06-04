@@ -4,7 +4,16 @@ Perfect Clear is a Java based program that allows users to practice perfect Tetr
 <h1>Getting Started</h1>
 Start by downloading the main.jar file, the additional jpgs, and the included solutions3.txt file. <br> 
 <br>
-Ensure that both are in the same folder (This allows the program to find the solutions) and run the main.java file. <br>
+Ensure that both are in the same folder (This allows the program to find the solutions) and run the main.java file. <br> <br>
+You can customize the control speed to how fast you are comfortable with the pieces moving. If you're curious, here's the specific tuning settings for each level: <br><br>
+
+Slow - 175 das, 60 arr
+
+Normal - 150 das, 40 arr
+
+Fast - 125 das, 20 arr
+
+Instant - 100 das, 0 arr
 <br>
 <h1> Additional Solutions </h1>
 Solution files for 4-, 5- and 6-piece puzzles are available for purchase. If you find perfect clear useful, please consider purchasing one to support us. <br>
