@@ -1,6 +1,6 @@
 # Perfect-Clear-Tetris
 Perfect Clear is a Java based program that allows users to practice perfect Tetris clears. <br>
-<h4><b>Please note, as of now, to run Perfect Clear, you must have Java installed. <a  target="_blank" rel="noopener" href = "https://www.java.com/en/download/"> Click here to download Java.</a></b> </h4>
+<h4><b>Please note, as of now, to run Perfect Clear, you must have Java Runtime Environment and Java Developer Kit installed. <a  target="_blank" rel="noopener" href = "https://www.java.com/en/download/"> Click here to download Java Runtime Environment.</a></b> <a  target="_blank" rel="noopener" href = "https://www.oracle.com/java/technologies/downloads/#jdk17-windows"> Click here to download Java Developer Kit.</a> </h4>
 <h1>Getting Started</h1>
 Start by downloading the main.jar file, the additional jpgs, and the included solutions3.txt file. <br> 
 <br>
