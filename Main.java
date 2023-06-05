@@ -988,6 +988,9 @@ public class Main extends Canvas{
 				g.fillRect(100+x*20, 100+y*20, 20, 20);
 			}
 		}
+		g.setColor(Color.white);
+		g.drawString("NEXT", 305, 139);
+		g.drawRect(305, 140, 110, 60*pieces+20);
 		for (int i=1; i<queue.size()&&solIndex<0; i++) {
 			int piece = queue.get(i);
 			g.setColor(colors[piece]);
@@ -1013,9 +1016,12 @@ public class Main extends Canvas{
 			shadow[i].translate(0, -1);
 			g.fillRect(100+shadow[i].x*20, 100+shadow[i].y*20, 20, 20);
 		}
+		g.setColor(Color.white);
+		g.drawString("HOLD", 5, 44);
+		g.drawRect(5, 45, 90, 50);
 		g.setColor(colors[hold]);
 		for (int i=0; i<4&&solIndex<0&&hold>0; i++) {
-			g.fillRect(30+shapes[hold][i].x*20, 50+10+shapes[hold][i].y*20, 20, 20);
+			g.fillRect(30+shapes[hold][i].x*20, 70+shapes[hold][i].y*20, 20, 20);
 		}
 		g.setColor(colors[queue.get(0)]);
 		Point[] shape = rotate(queue.get(0), current, rotation);
